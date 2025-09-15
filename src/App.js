@@ -1,19 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import {
-  Box,
-  Heading,
-  Text,
-  VStack,
-  Spinner,
-  useToast,
-  Flex,
-  Grid,
-  GridItem,
-} from '@chakra-ui/react';
+import { Box, Heading, Text, VStack, Spinner, useToast, Flex, Grid, GridItem, ButtonGroup, Button } from '@chakra-ui/react';
 import Navbar from './components/Navbar';
 import UserProfile from './components/UserProfile';
 import PostProblemForm from './components/PostProblemForm';
 import ProblemItem from './components/ProblemItem';
+import Leaderboard from './components/Leaderboard';
+import Dashboard from './components/Dashboard';
 
 const BACKEND_URL = 'http://localhost:8080';
 
@@ -25,6 +17,7 @@ function App() {
   const [hasNewAchievement, setHasNewAchievement] = useState(false);
   const [newProblemTitle, setNewProblemTitle] = useState('');
   const [newProblemDescription, setNewProblemDescription] = useState('');
+  const [view, setView] = useState('problems'); // 'problems', 'leaderboard', 'dashboard'
   const toast = useToast();
 
   const fetchProblems = useCallback(async () => {
@@ -40,15 +33,23 @@ function App() {
           setUser(await res.json());
           await fetchProblems();
         }
-      } catch (error) {
-        console.error("Error fetching user:", error);
-      } finally {
-        setIsLoading(false);
-      }
+      } catch (error) { console.error("Error fetching user:", error); } 
+      finally { setIsLoading(false); }
     };
     fetchUser();
   }, [fetchProblems]);
 
+  const handleLikeProblem = async (problemId) => {
+      await fetch(`${BACKEND_URL}/api/problems/${problemId}/like`, { method: 'PUT', credentials: 'include' });
+      await fetchProblems(); // Refresh to show new like count
+  };
+
+  const handleSaveProblem = async (problemId) => {
+      await fetch(`${BACKEND_URL}/api/problems/${problemId}/save`, { method: 'PUT', credentials: 'include' });
+      toast({ title: "Problem Saved!", status: 'success', duration: 2000, isClosable: true, position: 'top-right' });
+  };
+  
+  // All other handlers (handlePostProblem, handleSolve, etc.) remain the same
   const handlePostProblem = async (e) => {
     e.preventDefault();
     if (!newProblemTitle || !newProblemDescription) return;
@@ -113,6 +114,28 @@ function App() {
     }
   };
 
+
+  const renderView = () => {
+    switch(view) {
+      case 'leaderboard':
+        return <Leaderboard />;
+      case 'dashboard':
+         return <Dashboard user={user} />;
+      case 'problems':
+      default:
+        return (
+          <VStack spacing={6} align="stretch">
+            <Heading size="lg">Problems Feed</Heading>
+            {problems.length > 0 ? (
+              problems.map((p) => <ProblemItem key={p.id} problem={p} onSolve={handleSolve} onLike={handleLikeProblem} onSave={handleSaveProblem} />)
+            ) : (
+              <Text>No problems posted yet. Be the first!</Text>
+            )}
+          </VStack>
+        );
+    }
+  };
+
   if (isLoading) {
     return (
       <Flex justify="center" align="center" height="100vh" bg="gray.800">
@@ -125,25 +148,19 @@ function App() {
     <Box bg="gray.800" minH="100vh" color="white">
       <Navbar user={user} backendUrl={BACKEND_URL} />
       
-      <Grid
-        templateColumns={{ base: "1fr", md: "repeat(5, 1fr)" }}
-        gap={8}
-        p={8}
-      >
+      <Grid templateColumns={{ base: "1fr", md: "repeat(5, 1fr)" }} gap={8} p={8}>
         <GridItem colSpan={{ base: 5, md: 3 }}>
-          <VStack spacing={6} align="stretch">
-            <Heading size="lg">Problems</Heading>
-            {problems.length > 0 ? (
-              problems.map((p) => <ProblemItem key={p.id} problem={p} onSolve={handleSolve} />)
-            ) : (
-              <Text>No problems posted yet. Be the first!</Text>
-            )}
-          </VStack>
+          {renderView()}
         </GridItem>
         
         <GridItem colSpan={{ base: 5, md: 2 }}>
           {user ? (
             <VStack spacing={8} align="stretch">
+               <ButtonGroup>
+                  <Button onClick={() => setView('problems')} isActive={view === 'problems'}>Problems</Button>
+                  <Button onClick={() => setView('leaderboard')} isActive={view === 'leaderboard'}>Leaderboard</Button>
+                  <Button onClick={() => setView('dashboard')} isActive={view === 'dashboard'}>My Dashboard</Button>
+               </ButtonGroup>
               <UserProfile
                 user={user}
                 onGenerate={handleGenerateCertificate}
@@ -160,9 +177,7 @@ function App() {
               />
             </VStack>
           ) : (
-            <Box p={5} shadow="md" borderWidth="1px" borderRadius="lg" bg="gray.700" textAlign="center">
-              <Text>Please log in to participate.</Text>
-            </Box>
+            <Leaderboard /> // Show leaderboard for logged-out users
           )}
         </GridItem>
       </Grid>
